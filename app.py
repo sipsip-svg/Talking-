@@ -3,10 +3,8 @@ from google import genai
 
 st.title("Conversational Assistant")
 
-# 1. Initialize the Gemini Client (Replace with your actual API key)
-# It is best practice to set this as an environment variable, but you can paste it here for testing.
-API_KEY = "YOUR_GEMINI_API_KEY"
-client = genai.Client(api_key=API_KEY)
+# 1. Safely pull your API Key from Streamlit Secrets
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # 2. Set up a system instruction to tell the AI how to behave
 SYSTEM_INSTRUCTION = """
@@ -15,9 +13,12 @@ Do not interview them rigidly. Have a natural, flowing conversation.
 If they go off-topic, acknowledge what they said politely, but gently guide them back to finding out the missing pieces of information.
 """
 
-# 3. Initialize chat history in Streamlit session state so it remembers past messages
+# 3. Initialize both the Client AND Chat inside st.session_state so they never close unexpectedly
+if "client" not in st.session_state:
+    st.session_state.client = genai.Client(api_key=API_KEY)
+
 if "chat" not in st.session_state:
-    st.session_state.chat = client.chats.create(
+    st.session_state.chat = st.session_state.client.chats.create(
         model="gemini-2.5-flash",
         config={"system_instruction": SYSTEM_INSTRUCTION}
     )
@@ -36,10 +37,14 @@ if user_input := st.chat_input("Type your message here..."):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Send message to Gemini chat session (which automatically tracks history)
+    # Send message to Gemini chat session using the persisted client
     response = st.session_state.chat.send_message(user_input)
     
     # Display assistant response
     with st.chat_message("assistant"):
         st.markdown(response.text)
     st.session_state.messages.append({"role": "assistant", "content": response.text})
+    
+    # Force a rerun to clean up the UI smoothly
+    st.rerun()
+
